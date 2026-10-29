@@ -30,7 +30,7 @@ started by speeding up SEW-ResNet, one of the best-known models implemented in S
 used SNN libraries.
 Apart from a dedicated fused kernel for the Leaky Integrate-and-Fire neuron, we aimed to rely as far as possible only
 on the optimizations of tt-xla, the standard machine-learning framework compiler for Tenstorrent hardware. We did,
-however, rewrite parts of the model on the PyTorch side (folding and splitting the stem conv, replacing the average
+however, rewrite parts of the model on the PyTorch side (converting the stem conv by space-to-depth and splitting it, replacing the average
 pool with a matmul, changing tensor layouts) and preprocess the input on the host.
 Tenstorrent provides skills that support optimization by agents; we had Opus 5.5 use them in Claude Code and worked
 on the speed-up semi-automatically.
@@ -88,7 +88,7 @@ uses, so treat these as estimates. The A30 values are GPU kernel times from torc
 - The conv outputs on the p150a carry about 10 mantissa bits, so spikes near the threshold flip. When the LIF kernel
   was introduced, the device logits correlated with the CPU logits at 0.911 (0.908 for the original `SimpleLIFNode` on
   the device). CPU-only runs with rounding-sized noise added to the layer outputs level off at about 0.92
-- The later changes do some preprocessing on the host: reordering the input, padding channels with zeros, folding,
+- The later changes do some preprocessing on the host: reordering the input, padding channels with zeros, space-to-depth,
   and splitting per time step (about 6.6 ms under trace). That time is not included in the p150a values
 - The A30 values come from the same model built the same way (the LIF is SpikingJelly's `LIFNode`, which runs as a
   Triton kernel on the A30). SpikingJelly's benchmark itself disables TF32, so both values are shown

@@ -168,7 +168,7 @@ SNN の検証で、前提と実際が異なっていた事項を記録する。�
 
 ### D15. trace が optimization_level 0 で Conv を含むとコンパイルできない（実装）
 
-- 期待: trace（`enable_trace`、`TT_RUNTIME_TRACE_REGION_SIZE`）は optimization_level によらず使用できる（`docs/source/performance.md` に level の条件は記載されていない）。
+- 期待: trace（`enable_trace`、`TT_RUNTIME_TRACE_REGION_SIZE`）は optimization_level によらず使用できる（tt-xla の `docs/source/performance.md` に level の条件は記載されていない）。
 - 実際: level 0 で、Linear→ReLU→Linear は trace で動作する。Conv→ReLU（fp32 でも bf16 でも）はコンパイルで `error: Memory layout is required for non-SystemMemory buffer type.` を出力して abort する。SEW-ResNet18 は `Device-resident input must be on device, but found on system memory` で停止する。公式のテストで trace を用いるものは、いずれも level 1 以上だった。level 1 は D9 で Conv が通らない。
 - 影響: Conv を含むモデルで trace を用いる手段がない。
 - 扱い: 新しいプラグインで確認する。デバイスは毎回正常（`fw_id=0`）。
@@ -280,7 +280,7 @@ SNN の検証で、前提と実際が異なっていた事項を記録する。�
 ### D30. tt-xla から conv の設定や L1 への配置を指定できない（実装）
 
 - 期待: S28 で、tt-xla 1.4.0 のプラグイン（`pjrt_plugin_tt.so`）の文字列に、tt-mlir の `override-conv2d-config`、`override-output-layout`、`insert-memreconfig` が含まれていた。コンパイルのオプションから、これらか、L1 への配置に限った指定を渡せるかもしれない。
-- 実際（S29。サブエージェントが手元の tt-xla の clone（`b360078`。1.4.0 は `941a6b8` のビルドで、clone の方が新しい）と 1.4.0 の `.so` を読んだ。実機では試していない）: コンパイルのオプションは `pjrt_implementation/src/api/compile_options.cc:16-142` の決まったキー（`optimization_level`、`enable_trace`、`math_fidelity`、`fp32_dest_acc_en`、`experimental_weight_dtype` など）のみで、未知のキーは警告なしに破棄する（`compile_options_parser.cc:349-351`）。tt-mlir に渡すのは `module_builder.cc:1016` の `optimizationLevel` などの決まった項目のみで、パイプラインのオプションをそのまま渡す経路はない。`.so` にある名前は、tt-mlir の定義がリンクされているだけ。level 0、1 は活性化をすべて DRAM に配置し、L1 に配置するのは level 2（`docs/source/performance.md:49-68`。conv を含むとコンパイルできない。D9、D15）。`experimental_weight_dtype` の対象は matmul と linear のみで、conv には適用されない（`performance.md:160`）。
+- 実際（S29。サブエージェントが手元の tt-xla の clone（`b360078`。1.4.0 は `941a6b8` のビルドで、clone の方が新しい）と 1.4.0 の `.so` を読んだ。実機では試していない）: コンパイルのオプションは `pjrt_implementation/src/api/compile_options.cc:16-142` の決まったキー（`optimization_level`、`enable_trace`、`math_fidelity`、`fp32_dest_acc_en`、`experimental_weight_dtype` など）のみで、未知のキーは警告なしに破棄する（`compile_options_parser.cc:349-351`）。tt-mlir に渡すのは `module_builder.cc:1016` の `optimizationLevel` などの決まった項目のみで、パイプラインのオプションをそのまま渡す経路はない。`.so` にある名前は、tt-mlir の定義がリンクされているだけ。level 0、1 は活性化をすべて DRAM に配置し、L1 に配置するのは level 2（tt-xla の `docs/source/performance.md:49-68`。conv を含むとコンパイルできない。D9、D15）。`experimental_weight_dtype` の対象は matmul と linear のみで、conv には適用されない（`performance.md:160`）。
 - 分かっていること: コンテナの ttnn で conv の入出力を L1 に配置し、`enable_act_double_buffer` を用いると、stem を除く conv は 3.71 → 2.34〜2.74 ms、LIF（layer1〜4）は 1.27 → 0.92 ms になる（S29、単体の和）。tt-mlir が付与する設定（`act_block_h_override`、シャードの指定なし、double buffer なし、DRAM の interleaved）のままでは、この短縮分は得られない。
 - 追記（S29、ネットワーク全体）: IR の演算の出力を連結して再実行する `ttnn-replay-chain.py` で、layer1 以降の活性化を L1 に配置し、conv に double buffer を用い、L1 に収まらないテンソルだけを DRAM に配置すると、1 ステップのデバイスの稼働時間は 9.84 → 7.97 ms になった（コンテナ。LIF のスパイクは全層で CPU と一致）。tt-xla の経路で得られていない短縮分は、少なくともこの 1.9 ms。
 - 扱い: tt-xla の経路の中では、conv と活性化の配置先を調整できない。迂回策の候補は `backend=codegen_py`（TTNN の Python のコードを出力し、手作業で修正して `codegen_load_py` で読み込む。`compile_options.h:12-31`、`compile_options.cc:54-66`。p150a、trace、tt-lang の演算で動作するかは確認していない）か、モデルを ttnn で直接記述すること（公式の ResNet-50 と同じ方式）。
