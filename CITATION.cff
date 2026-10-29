@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+title: "Spiking ResNet on Tenstorrent: SEW-ResNet18 inference on Blackhole p150a with a fused tt-lang LIF kernel"
+authors:
+  - family-names: Oshio
+    given-names: Reon
+version: 0.1.0
+date-released: 2026-10-29
+license: Apache-2.0
+repository-code: "https://github.com/reo-neuro/spiking-resnet-on-tenstorrent"
+keywords:
+  - spiking neural networks
+  - Tenstorrent
+  - Blackhole
+  - tt-lang
+  - tt-xla
+  - SpikingJelly
