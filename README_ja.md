@@ -5,7 +5,8 @@
 SpikingJelly 2.0 の SEW-ResNet18 の推論を、Tenstorrent Blackhole p150a で実装して高速化した記録。モデルは tt-xla（torch_xla と PJRT プラグインの `pjrt-plugin-tt`）でコンパイルし、LIF ニューロンだけを tt-lang で記述したカーネルに置換した。
 
 - 推論 1 ステップ（T = 4 時刻ぶん）の時間: 222.8 ms → 9.44 ms
-- NVIDIA A30（TF32）では同じ 1 ステップが 7.52 ms。p150a の時間はその 1.26 倍
+- NVIDIA A30（TF32）では同じ 1 ステップが 7.52 ms。p150a の時間はその 1.26 倍。
+- ただし、p150aにはまだ多くの最適化の余地があり、帯域を最大限活用できれば、実行時間は現在のおよそ半分まで減少する見込みである。例えば、現状はConvやLinearへのカーネル最適化を行っておらず、コンパイラ任せである。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figures/step-times-dark.png">
