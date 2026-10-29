@@ -14,7 +14,7 @@ SpikingJelly 2.0 の SEW-ResNet18 の推論を、Tenstorrent Blackhole p150a で
 
 ## 動機と手法、主張範囲
 Tenstorrent Blackholeアーキテクチャはメッシュ型のNoCを持つ分散メモリのメニコアAIアクセラレータであり、この特徴はNeuromorphic ProcessorであるIntel Loihi/Loihi2に類似している。
-そのため、Spiking Neural Networks (SNN) の高速化に向くと考え、まずは最も普及したSNNライブラリであるSpikingJellyで実装された最も有名なモデルの一つであるSEW-ResNetの高速化に取り組みたい。
+そのため、Spiking Neural Networks (SNN) の高速化に向くと考え、まずは最も普及したSNNライブラリであるSpikingJellyで実装された最も有名なモデルの一つであるSEW-ResNetの高速化に取り組む。
 そのうえで、Leaky Integrate-and-Fire Neuronの専用Fused Kernelを作る以外は、通常のtenstorrent hardware向け機械学習フレームワークコンパイラtt-xlaの最適化以外を出来るだけ用いずに高速化したい。
 Tenstorrentはエージェントによる最適化を支援するためのskillを提供しているため、これをClaude CodeでOpus5.5が用いることで、半自動で高速化に取り組む。
 Tenstorrent BH p150aへのSNNの実装において、エージェントによるパフォーマンスエンジニアリングがどの程度機能するかのテストであるため、厳密に他種の計算基盤との比較などは現状意図していない。
