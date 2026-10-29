@@ -14,6 +14,24 @@ kernel written in tt-lang.
   <img alt="Time per step after each change: from 222.8 ms down to 9.44 ms, close to the A30's 7.52 ms with TF32" src="docs/figures/step-times-light.png" width="800">
 </picture>
 
+## Motivation, method and scope
+
+The Tenstorrent Blackhole architecture is a many-core AI accelerator with distributed memory, whose cores are laid
+out in a grid and connected by a 2D torus network-on-chip (two NoCs). In this respect it resembles Intel's
+neuromorphic processors Loihi and Loihi 2. We therefore expected it to suit spiking neural networks (SNNs), and
+started by speeding up SEW-ResNet, one of the best-known models implemented in SpikingJelly, one of the most widely
+used SNN libraries.
+Apart from a dedicated fused kernel for the Leaky Integrate-and-Fire neuron, we aimed to rely as far as possible only
+on the optimizations of tt-xla, the standard machine-learning framework compiler for Tenstorrent hardware. We did,
+however, rewrite parts of the model on the PyTorch side (folding and splitting the stem conv, replacing the average
+pool with a matmul, changing tensor layouts) and preprocess the input on the host.
+Tenstorrent provides skills that support optimization by agents; we had Opus 5.5 use them in Claude Code and worked
+on the speed-up semi-automatically.
+This is a test of how well performance engineering by an agent works for implementing SNNs on the Tenstorrent
+Blackhole p150a, so a rigorous comparison with other computing platforms is not intended at this point.
+There should be SNN configurations better suited to judging how well Tenstorrent hardware fits SNNs, but since we are
+testing with a well-known model first, we make no claim about that either.
+
 ## Results
 
 Conditions: SEW-ResNet18 (ADD connections), 224 x 224 input, batch 8, T = 4, fp32, BatchNorm in inference mode.
