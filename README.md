@@ -34,24 +34,25 @@ testing with a well-known model first, we make no claim about that either.
 
 ## Results
 
-Conditions: SEW-ResNet18 (ADD connections), 224 x 224 input, batch 8, T = 4, fp32, BatchNorm in inference mode.
+Conditions: SEW-ResNet18 (ADD residual connections), 224 x 224 input, batch 8, T = 4, fp32, BatchNorm in inference
+mode.
 
-- Pipelined: k steps are submitted back to back and waited for once; the time is divided by k
-- Synced: the logits are read back to the host after every step
+- Pipelined: k steps are sent back to back and waited for once; the time is converted to one step.
+- Synced: the logits are transferred to the host after every step.
 
 | Change | Pipelined | Synced |
 | --- | --- | --- |
-| Original `SimpleLIFNode` (LIF as small TTNN ops) | 222.8 ms | 255.8 ms |
-| LIF as one tt-lang kernel, called on the BN output layout (NCHW) | 70.1 ms | 85.7 ms |
-| LIF kernel called on the conv output layout | 31.5 ms | 43.0 ms |
-| Reshapes around the LIF removed; layer4 passed as `[1, T, R, C]` | 28.3 ms | 34.6 ms |
-| Trace | 21.1 ms | 27.2 ms |
-| Input laid out for the conv on the host | 17.1 ms | 22.7 ms |
-| Stem conv folded 2 x 2 | 14.5 ms | 19.6 ms |
-| Stem conv split per time step, read directly by the LIF | 11.9 ms | 17.3 ms |
-| Leaner LIF kernel on 110 cores | 10.1 ms | 15.5 ms |
-| Residual add fused into the LIF | 9.59 ms | 14.2 ms |
-| Stem conv as 16 images x 2, average pool as a matmul | **9.44 ms** | 15.0 ms |
+| Original `SimpleLIFNode` (the LIF was implemented with small TTNN ops) | 222.8 ms | 255.8 ms |
+| LIF replaced by a single tt-lang kernel (called in the dimension order of the BN output, NCHW) | 70.1 ms | 85.7 ms |
+| LIF kernel called in the dimension order of the conv output | 31.5 ms | 43.0 ms |
+| Reshapes around the LIF eliminated; the layer4 LIF takes input of shape `[1, T, R, C]` | 28.3 ms | 34.6 ms |
+| Trace used | 21.1 ms | 27.2 ms |
+| Input dimension order matched to the conv on the host | 17.1 ms | 22.7 ms |
+| Stem conv converted to a stride-1 conv by 2 x 2 space-to-depth | 14.5 ms | 19.6 ms |
+| Stem conv split per time step; the following LIF loads its outputs directly | 11.9 ms | 17.3 ms |
+| Computation in the LIF kernel reduced; cores in use increased to 110 | 10.1 ms | 15.5 ms |
+| Residual-connection add fused into the LIF | 9.59 ms | 14.2 ms |
+| Stem conv split into 16 images x 2; average pool replaced by a matmul | **9.44 ms** | 15.0 ms |
 | (reference) A30, TF32 and `cudnn.benchmark` | 7.52 ms | 7.63 ms |
 | (reference) A30, strict fp32 as in SpikingJelly's benchmark | 14.75 ms | — |
 
