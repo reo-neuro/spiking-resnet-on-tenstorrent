@@ -12,6 +12,14 @@ SpikingJelly 2.0 の SEW-ResNet18 の推論を、Tenstorrent Blackhole p150a で
   <img alt="変更ごとの 1 ステップの時間。222.8 ms から 9.44 ms まで下がり、A30（TF32）の 7.52 ms に近づく" src="docs/figures/step-times-light.png" width="800">
 </picture>
 
+## 動機と手法、主張範囲
+Tenstorrent Blackholeアーキテクチャはメッシュ型のNoCを持つ分散メモリのメニコアAIアクセラレータであり、この特徴はNeuromorphic ProcessorであるIntel Loihi/Loihi2に類似している。
+そのため、Spiking Neural Networks (SNN) の高速化に向くと考え、まずは最も普及したSNNライブラリであるSpikingJellyで実装された最も有名なモデルの一つであるSEW-ResNetの高速化に取り組みたい。
+そのうえで、Leaky Integrate-and-Fire Neuronの専用Fused Kernelを作る以外は、通常のtenstorrent hardware向け機械学習フレームワークコンパイラtt-xlaの最適化以外を出来るだけ用いずに高速化したい。
+Tenstorrentはエージェントによる最適化を支援するためのskillを提供しているため、これをClaude CodeでOpus5.5が用いることで、半自動で高速化に取り組む。
+Tenstorrent BH p150aへのSNNの実装において、エージェントによるパフォーマンスエンジニアリングがどの程度機能するかのテストであるため、厳密に他種の計算基盤との比較などは現状意図していない。
+TenstorrentハードウェアとSNNの相性について判断するためにはもっと適したSNNの構成が存在するはずだが、まずは有名なものでテストしているため、それについても主張はしない。
+
 ## 結果
 
 条件: SEW-ResNet18（接続は ADD）、入力 224 × 224、batch 8、T = 4、fp32、BatchNorm は推論モード。
