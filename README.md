@@ -1,89 +1,97 @@
 # Spiking ResNet on Tenstorrent
 
-SEW-ResNet18 (SpikingJelly 2.0) inference on a Tenstorrent Blackhole p150a, compiled with tt-xla (torch_xla + the
-`pjrt-plugin-tt` PJRT plugin), with the multi-step LIF neuron replaced by a fused tt-lang kernel. Over the course of the
-work the time per inference step went from 222.8 ms to 9.44 ms; an NVIDIA A30 with TF32 takes 7.52 ms for the same
-step. The repository holds the kernel, the scripts used to run and measure the model on both devices, and the notes on
-what the time was spent on and which constraints of the toolchain we ran into.
+[日本語](README_ja.md)
+
+A record of running SEW-ResNet18 (SpikingJelly 2.0) inference on a Tenstorrent Blackhole p150a and making it fast. The
+model is compiled with tt-xla (torch_xla and the `pjrt-plugin-tt` PJRT plugin); only the LIF neuron is replaced, by a
+kernel written in tt-lang.
+
+- One inference step (T = 4 time steps) went from 222.8 ms to 9.44 ms
+- An NVIDIA A30 (TF32) takes 7.52 ms for the same step; the p150a takes 1.26 times as long
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/step-times-dark.png">
+  <img alt="Time per step after each change: from 222.8 ms down to 9.44 ms, close to the A30's 7.52 ms with TF32" src="docs/figures/step-times-light.png" width="800">
+</picture>
 
 ## Results
 
-One step = one inference of T = 4 time steps (`reset_net` to logits), SEW-ResNet18 (ADD connections), 224 x 224
-input, batch 8, fp32 tensors, BatchNorm in inference mode. "Pipelined" submits k steps back to back and waits once
-(time per step); "synced" reads the logits back to the host after every step.
+Conditions: SEW-ResNet18 (ADD connections), 224 x 224 input, batch 8, T = 4, fp32, BatchNorm in inference mode.
 
-| Stage | Pipelined | Synced |
+- Pipelined: k steps are submitted back to back and waited for once; the time is divided by k
+- Synced: the logits are read back to the host after every step
+
+| Change | Pipelined | Synced |
 | --- | --- | --- |
 | Original `SimpleLIFNode` (LIF as small TTNN ops) | 222.8 ms | 255.8 ms |
 | LIF as one tt-lang kernel, called on the BN output layout (NCHW) | 70.1 ms | 85.7 ms |
 | LIF kernel called on the conv output layout | 31.5 ms | 43.0 ms |
-| Remove the reshapes around the LIF, layer4 passed as `[1, T, R, C]` | 28.3 ms | 34.6 ms |
+| Reshapes around the LIF removed; layer4 passed as `[1, T, R, C]` | 28.3 ms | 34.6 ms |
 | Trace | 21.1 ms | 27.2 ms |
-| Input laid out for the conv on the host (under trace) | 17.1 ms | 22.7 ms |
+| Input laid out for the conv on the host | 17.1 ms | 22.7 ms |
 | Stem conv folded 2 x 2 | 14.5 ms | 19.6 ms |
 | Stem conv split per time step, read directly by the LIF | 11.9 ms | 17.3 ms |
 | Leaner LIF kernel on 110 cores | 10.1 ms | 15.5 ms |
 | Residual add fused into the LIF | 9.59 ms | 14.2 ms |
 | Stem conv as 16 images x 2, average pool as a matmul | **9.44 ms** | 15.0 ms |
 | (reference) A30, TF32 and `cudnn.benchmark` | 7.52 ms | 7.63 ms |
-| (reference) A30, strict fp32 as in the SpikingJelly benchmark | 14.75 ms | — |
+| (reference) A30, strict fp32 as in SpikingJelly's benchmark | 14.75 ms | — |
 
-Scope and caveats:
+Where the time of one step goes in the final configuration:
 
-- Speed only. The weights are the randomly initialized ones and the inputs are random, as in SpikingJelly's
-  benchmark; accuracy with trained weights was not evaluated.
-- Correctness was checked against the CPU in the same process, layer by layer. Changes that should not alter the math
-  (removing reshapes, splitting, fusing) were required to keep the logits bit-identical. The conv outputs on the p150a
-  carry about 10 mantissa bits, which flips spikes near the threshold. When the LIF kernel was introduced, the logits
-  correlated with the CPU at 0.911 (0.908 for the original `SimpleLIFNode` on the device); CPU-only runs whose layer
-  outputs are perturbed by rounding-sized noise level off at about 0.92.
-- Host-side preprocessing used by the later stages (input reordering, channel padding, folding, splitting per time
-  step; about 6.6 ms under trace) is not included in the p150a times.
-- The A30 reference is the same model built the same way, with SpikingJelly's Triton `LIFNode`. The SpikingJelly
-  benchmark itself disables TF32; both values are shown.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/breakdown-dark.png">
+  <img alt="Breakdown of one step in the final configuration. p150a: conv 3.71 ms, LIF 2.11 ms, layout 1.30 ms, pooling and other 1.11 ms, stem conv 0.96 ms. A30: conv 3.25 ms, LIF 1.54 ms, stem conv 1.06 ms, BN 0.97 ms, pooling and other 0.58 ms" src="docs/figures/breakdown-light.png" width="800">
+</picture>
+
+The p150a values are device busy times measured by replaying the TTNN IR written by tt-xla op by op (sum 9.19 ms; the
+step takes 9.44 ms). The replay used the tt-metal in a container, which is a different version from the one tt-xla
+uses, so treat these as estimates. The A30 values are GPU kernel times from torch.profiler (sum 7.41 ms; the step takes
+7.52 ms). On the p150a, the BNs are folded into the convs and the residual adds are fused into the LIF.
+
+### Reading the results
+
+- Speed only. The weights are the initial ones and the inputs are random, as in SpikingJelly's benchmark; accuracy
+  with trained weights was not evaluated
+- Correctness was checked against the CPU in the same process, layer by layer. For changes that should not alter the
+  math (removing reorders, splitting, fusing), the logits were checked to stay bit-identical
+- The conv outputs on the p150a carry about 10 mantissa bits, so spikes near the threshold flip. When the LIF kernel
+  was introduced, the device logits correlated with the CPU logits at 0.911 (0.908 for the original `SimpleLIFNode` on
+  the device). CPU-only runs with rounding-sized noise added to the layer outputs level off at about 0.92
+- The later changes do some preprocessing on the host: reordering the input, padding channels with zeros, folding,
+  and splitting per time step (about 6.6 ms under trace). That time is not included in the p150a values
+- The A30 values come from the same model built the same way (the LIF is SpikingJelly's `LIFNode`, which runs as a
+  Triton kernel on the A30). SpikingJelly's benchmark itself disables TF32, so both values are shown
 - Versions: `pjrt-plugin-tt` 1.4.0 (with its bundled tt-lang 1.1.5), torch 2.11.0, torch-xla 2.9.0, p150a firmware
-  19.15.0. Several of the constraints below are specific to these versions.
+  19.15.0. Some of the constraints in this README and in `docs/ja/discrepancies.md` are specific to these versions
 
 ## What we found
 
-- Before trace, the step time was set by the host submitting operations one by one (roughly 70–360 µs per operation,
-  12–72 times the A30's). Writing a neuron as element-wise ops costs about 7 ops per layer per time step, which made
-  the LIF the largest source of operations. Fusing each LIF layer into one kernel is the first thing to do.
-- After trace, replaying the TTNN IR op by op predicts the step time well (9.19 ms busy vs 9.44 ms measured), so the
-  replay breakdown can choose the next change.
-- On the device, reorderings (`reshape`, `permute`, `to_layout`) of shapes that are not multiples of the 32 x 32 tile
-  cost more than the convs at first (about 1 ms each). Calling the neuron kernel on the layout of the ops around it
-  removes them.
-- Spikes are 0/1 and the SEW sums are small integers, so they are exact in any precision. Fusing the residual add into
-  the LIF and computing the average pool as a matmul with a 0/1 matrix left the logits bit-identical.
-- What remains is conv and LIF time against DRAM bandwidth. Keeping activations in L1 would cut about 1.9 ms more
-  (measured by replaying the IR with L1 placement), but tt-xla 1.4.0 offers no way to request it.
-
-The full notes (in Japanese) are in `docs/ja/`: `speedup-guide.md` (how to approach another SNN, what worked and what
-did not), `discrepancies.md` (D1–D32: assumptions that turned out wrong, toolchain constraints and bugs) and
-`setup.md` (environments, script reference, the LIF kernel). S-numbers in the notes and code comments refer to entries
-of our lab notebook, which is not published.
-
-## Repository layout
-
-| Path | Contents |
-| --- | --- |
-| `tools/ttl_lif.py` | The multi-step LIF kernels in tt-lang (`make_lif`, `make_lif4`, `make_lif2`, `make_lif_add`, `make_lif_nchw`) |
-| `tools/xla-sew18.py` | Runs and times SEW-ResNet18 on the p150a through tt-xla, with switches for every change in the table |
-| `tools/a30-sew18.py`, `tools/a30-sew18-profile.py` | The same model on the A30, and its per-layer GPU time |
-| `tools/ttnn-replay-ir.py`, `tools/ttnn-replay-chain.py` | Replay the TTNN IR written by tt-xla op by op (or chained, with L1 placement) under the device profiler |
-| `tools/breakdown-sew18.py`, `tools/chain-csv.py` | Per-category and per-layer breakdowns and lower bounds |
-| `tools/ttl-lif-bench.py` | Device time of the LIF kernels on the SEW-ResNet18 shapes |
-| `tools/xla-op-hostcost.py`, `tools/thread-sampler.py` | Host cost per operation; per-thread CPU frequency while waiting |
-| `tools/lif-d22-emul.py`, `tools/xla-conv-check.py`, `tools/xla-stem-pad.py`, `tools/xla-bn-eval.py`, `tools/xla-op-backward.py`, `tools/sj_xla.py` | Reproducers and workarounds for the constraints in `discrepancies.md` |
-| `docs/ja/` | Notes (Japanese) |
+- Before trace, the step time was set by the host sending operations to the device one by one. That costs about
+  70–360 µs per operation, 12–72 times the A30's
+- Writing a neuron as element-wise ops takes about 7 ops per layer per time step, which made the LIF the largest
+  source of operations. The first thing to do is to make each neuron layer one kernel
+- After trace, the busy time from replaying the IR op by op predicted the real time well (9.19 ms vs 9.44 ms). The
+  next change can be chosen from that breakdown
+- On the device, reorders (`reshape`, `permute`, `to_layout`) took longer than the convs at first. Reordering a shape
+  that is not a multiple of the 32 x 32 tile costs about 1 ms each time. Calling the neuron kernel on the layout of
+  the ops around it removes the reorders
+- Spikes are 0 or 1 and the SEW sums are small integers, so they are exact in any precision. As a result, fusing the
+  residual add into the LIF and computing the average pool as a matmul with a 0/1 matrix left the logits bit-identical
+- With the reorders gone, conv and LIF remain. The convs other than the stem take about as long as on the A30 (TF32),
+  and the LIF is close to the DRAM bandwidth limit. In the IR replay, keeping the activations in L1 cut the busy time
+  by about 1.9 ms, but tt-xla 1.4.0 offers no way to request that
 
 ## Reproducing the best configuration
 
-Environments are described in `docs/ja/setup.md`. Paths are written as environment variables: `$VENV_XLA140` (Python
-3.12 venv with `pjrt-plugin-tt==1.4.0`, torch-xla 2.9.0 and SpikingJelly 2.0.0 installed with `--no-deps -e`),
-`$UV_PY312_LIB` (the `lib` directory of the uv-managed Python 3.12, needed by torch_xla to find libpython), `$VENV_A30`
-(torch 2.11.0+cu128 with SpikingJelly 2.0.0) and `$DATA` (output directory).
+Environments are described in `docs/ja/setup.md`. Paths are written as environment variables.
+
+| Variable | Contents |
+| --- | --- |
+| `$VENV_XLA140` | Python 3.12 venv with `pjrt-plugin-tt==1.4.0`, torch-xla 2.9.0 and SpikingJelly 2.0.0 (installed with `--no-deps -e`) |
+| `$UV_PY312_LIB` | The `lib` directory of the uv-managed Python 3.12, needed by torch_xla to find libpython |
+| `$VENV_A30` | Venv with torch 2.11.0+cu128 and SpikingJelly 2.0.0 |
+| `$DATA` | Output directory |
 
 ```bash
 # p150a: 20 pipelined steps, batch 8, T = 4, 224 x 224, optimization level 1, trace
@@ -95,12 +103,38 @@ LIF_GRID=11,10 LIF_RES=1 AVGPOOL=matmul WAIT=cpu LD_LIBRARY_PATH=$UV_PY312_LIB \
 CUDA_VISIBLE_DEVICES=0 TF32=1 CUDNN_BENCH=1 BN=eval $VENV_A30/bin/python -I tools/a30-sew18.py LIFNode 8 4 224 30
 ```
 
-We pinned the host threads to the NUMA node of each card and took the median of three runs.
+In both measurements the host threads were pinned to the NUMA node of the card. The p150a values are the median of
+three runs.
+
+## Files
+
+| Path | Contents |
+| --- | --- |
+| `tools/ttl_lif.py` | The multi-time-step LIF kernels in tt-lang (`make_lif`, `make_lif4`, `make_lif2`, `make_lif_add`, `make_lif_nchw`) |
+| `tools/xla-sew18.py` | Runs and times SEW-ResNet18 on the p150a through tt-xla; every change in the table is an environment variable |
+| `tools/a30-sew18.py`, `tools/a30-sew18-profile.py` | Times the same model on the A30, and its per-layer GPU time |
+| `tools/ttnn-replay-ir.py`, `tools/ttnn-replay-chain.py` | Replay the TTNN IR written by tt-xla op by op (or chained, with L1 placement) under the device profiler |
+| `tools/breakdown-sew18.py`, `tools/chain-csv.py` | Per-category and per-layer breakdowns and lower bounds |
+| `tools/ttl-lif-bench.py` | Device time of the LIF kernels on the SEW-ResNet18 shapes |
+| `tools/xla-op-hostcost.py`, `tools/thread-sampler.py` | Measure the host cost per operation; record per-thread CPU frequency while waiting |
+| `tools/lif-d22-emul.py`, `tools/xla-conv-check.py`, `tools/xla-stem-pad.py`, `tools/xla-bn-eval.py`, `tools/xla-op-backward.py`, `tools/sj_xla.py` | Reproducers and workarounds for the constraints in `discrepancies.md` |
+| `docs/ja/` | Notes (Japanese) |
+| `docs/figures/` | Figures in this README |
+
+## Notes
+
+`docs/ja/` holds three documents (in Japanese):
+
+- `speedup-guide.md`: how to approach speeding up another SNN; what worked and what did not
+- `discrepancies.md`: assumptions that turned out wrong, toolchain constraints and bugs (D1–D32)
+- `setup.md`: environments, script reference, the equations of the LIF kernel
+
+S-numbers in the notes and code comments refer to entries of our lab notebook, which is not published.
 
 ## Next
 
-We are moving to SRAM-resident, time-stepped SNN execution on Blackhole: weights, membrane potentials and spikes stay
-in the Tensix cores' L1 across time steps, with the cores synchronized once per step (in progress).
+We are moving to running SNNs on Blackhole with weights, membrane potentials and spikes kept in the Tensix cores' L1,
+synchronizing all cores once per time step.
 
 ## License
 
