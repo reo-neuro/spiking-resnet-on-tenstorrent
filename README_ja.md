@@ -127,6 +127,10 @@ CUDA_VISIBLE_DEVICES=0 TF32=1 CUDNN_BENCH=1 BN=eval $VENV_A30/bin/python -I tool
 
 Blackhole 上で、重み、膜電位、スパイクを Tensix コアの L1 に保持したまま、全コアを 1 時刻に 1 回同期させて SNN を実行するよりNeuromorphicな実装方式に進む予定である。
 
+## 関連する公開物
+
+Tenstorrent のハードウェア向けには、SNN のカーネル（PLIF、ALIF のニューロン、対角 SSM の再帰など）を TT-Metalium で記述する公開リポジトリがある（開発の初期段階）[9]。分散した SRAM を持つ別のメニコアの AI アクセラレータでは、Graphcore IPU で SNN の学習を高速化した報告がある [10][11]。
+
 ## 参考文献
 
 1. W. Fang et al., "SpikingJelly: An open-source machine learning infrastructure platform for spike-based intelligence," *Science Advances*, 9(40), eadi1480, 2023. https://doi.org/10.1126/sciadv.adi1480 ／ リポジトリ: https://github.com/fangwei123456/spikingjelly（2.0.0 を使用）
@@ -137,6 +141,9 @@ Blackhole 上で、重み、膜電位、スパイクを Tensix コアの L1 に�
 6. G. Orchard et al., "Efficient Neuromorphic Signal Processing with Loihi 2," IEEE Workshop on Signal Processing Systems (SiPS), 2021. https://doi.org/10.1109/SiPS52927.2021.00053
 7. Tenstorrent, skills. https://github.com/tenstorrent/skills
 8. Tenstorrent, tt-metal（TT-Metalium、TT-NN）. https://github.com/tenstorrent/tt-metal
+9. RichardMiller90, tt-snn-kernels. https://github.com/RichardMiller90/tt-snn-kernels
+10. J. Finkbeiner, T. Gmeinder, M. Pupilli, A. Titterton, E. Neftci, "Harnessing Manycore Processors with Distributed Memory for Accelerated Training of Sparse and Recurrent Models," AAAI 2024. https://arxiv.org/abs/2311.04386
+11. P.-S. V. Sun et al., "Exploiting deep learning accelerators for neuromorphic workloads," *Neuromorphic Computing and Engineering*, 4(1), 014004, 2024. https://doi.org/10.1088/2634-4386/ad2373
 
 ## ライセンス
 

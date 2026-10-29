@@ -166,6 +166,12 @@ S-numbers in the notes and code comments refer to entries of our lab notebook, w
 We plan to move on to a more neuromorphic way of implementing SNNs on Blackhole: weights, membrane potentials and
 spikes stay in the Tensix cores' L1, and all cores synchronize once per time step.
 
+## Related work
+
+For Tenstorrent hardware, a public repository is writing SNN kernels in TT-Metalium (PLIF and ALIF neurons, a diagonal
+SSM recurrence and more; early development) [9]. On another many-core AI accelerator with distributed SRAM, Graphcore's
+IPU, SNN training has been accelerated [10][11].
+
 ## References
 
 1. W. Fang et al., "SpikingJelly: An open-source machine learning infrastructure platform for spike-based intelligence," *Science Advances*, 9(40), eadi1480, 2023. https://doi.org/10.1126/sciadv.adi1480 / Repository: https://github.com/fangwei123456/spikingjelly (2.0.0 was used)
@@ -176,6 +182,9 @@ spikes stay in the Tensix cores' L1, and all cores synchronize once per time ste
 6. G. Orchard et al., "Efficient Neuromorphic Signal Processing with Loihi 2," IEEE Workshop on Signal Processing Systems (SiPS), 2021. https://doi.org/10.1109/SiPS52927.2021.00053
 7. Tenstorrent, skills. https://github.com/tenstorrent/skills
 8. Tenstorrent, tt-metal (TT-Metalium, TT-NN). https://github.com/tenstorrent/tt-metal
+9. RichardMiller90, tt-snn-kernels. https://github.com/RichardMiller90/tt-snn-kernels
+10. J. Finkbeiner, T. Gmeinder, M. Pupilli, A. Titterton, E. Neftci, "Harnessing Manycore Processors with Distributed Memory for Accelerated Training of Sparse and Recurrent Models," AAAI 2024. https://arxiv.org/abs/2311.04386
+11. P.-S. V. Sun et al., "Exploiting deep learning accelerators for neuromorphic workloads," *Neuromorphic Computing and Engineering*, 4(1), 014004, 2024. https://doi.org/10.1088/2634-4386/ad2373
 
 ## License
 
