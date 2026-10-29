@@ -2,7 +2,7 @@
 
 [日本語](README_ja.md)
 
-A record of running SEW-ResNet18 [2] (SpikingJelly 2.0 [1]) inference on a Tenstorrent Blackhole p150a and making it fast. The
+A record of running the SpikingJelly 2.0 [1] implementation of SEW-ResNet18 [2] on a Tenstorrent Blackhole p150a and making it fast. The
 model is compiled with tt-xla [3] (torch_xla and the `pjrt-plugin-tt` PJRT plugin); only the LIF neuron is replaced, by a
 kernel written in tt-lang [4].
 
@@ -25,14 +25,14 @@ The gray bar is before, the dark blue bar is after all changes. Each bar in betw
 
 The Tenstorrent Blackhole architecture is a many-core AI accelerator with distributed memory, whose cores are laid
 out in a grid and connected by a 2D torus network-on-chip (two NoCs). In this respect it resembles Intel's
-neuromorphic processors Loihi [6] and Loihi 2 [7]. We therefore expected it to suit spiking neural networks (SNNs), and
+neuromorphic processors Loihi [5] and Loihi 2 [6]. We therefore expected it to suit spiking neural networks (SNNs), and
 started by speeding up SEW-ResNet, one of the best-known models implemented in SpikingJelly, one of the most widely
 used SNN libraries.
 Apart from a dedicated fused kernel for the Leaky Integrate-and-Fire neuron, we aimed to rely as far as possible only
 on the optimizations of tt-xla, the standard machine-learning framework compiler for Tenstorrent hardware. We did,
 however, rewrite parts of the model on the PyTorch side (converting the stem conv by space-to-depth and splitting it, replacing the average
 pool with a matmul, changing tensor layouts) and preprocess the input on the host.
-Tenstorrent provides skills [8] that support optimization by agents; we had Opus 5.5 use them in Claude Code and worked
+Tenstorrent provides skills [7] that support optimization by agents; we had Opus 5.5 use them in Claude Code and worked
 on the speed-up semi-automatically.
 This is a test of how well performance engineering by an agent works for implementing SNNs on the Tenstorrent
 Blackhole p150a, so a rigorous comparison with other computing platforms is not intended at this point.
@@ -49,7 +49,7 @@ mode.
 
 | Change | Pipelined | Synced |
 | --- | --- | --- |
-| Original `SimpleLIFNode` (the LIF was implemented with small TTNN [5] ops) | 222.8 ms | 255.8 ms |
+| Original `SimpleLIFNode` (the LIF was implemented with small TTNN [8] ops) | 222.8 ms | 255.8 ms |
 | LIF replaced by a single tt-lang kernel (called in the dimension order of the BN output, NCHW) | 70.1 ms | 85.7 ms |
 | LIF kernel called in the dimension order of the conv output | 31.5 ms | 43.0 ms |
 | Reshapes around the LIF eliminated; the layer4 LIF takes input of shape `[1, T, R, C]` | 28.3 ms | 34.6 ms |
@@ -172,10 +172,10 @@ spikes stay in the Tensix cores' L1, and all cores synchronize once per time ste
 2. W. Fang, Z. Yu, Y. Chen, T. Huang, T. Masquelier, Y. Tian, "Deep Residual Learning in Spiking Neural Networks," NeurIPS 2021. https://arxiv.org/abs/2102.04159
 3. Tenstorrent, tt-xla. https://github.com/tenstorrent/tt-xla
 4. Tenstorrent, tt-lang. https://github.com/tenstorrent/tt-lang
-5. Tenstorrent, tt-metal (TT-Metalium, TT-NN). https://github.com/tenstorrent/tt-metal
-6. M. Davies et al., "Loihi: A Neuromorphic Manycore Processor with On-Chip Learning," *IEEE Micro*, 2018. https://doi.org/10.1109/MM.2018.112130359
-7. G. Orchard et al., "Efficient Neuromorphic Signal Processing with Loihi 2," IEEE Workshop on Signal Processing Systems (SiPS), 2021. https://doi.org/10.1109/SiPS52927.2021.00053
-8. Tenstorrent, skills. https://github.com/tenstorrent/skills
+5. M. Davies et al., "Loihi: A Neuromorphic Manycore Processor with On-Chip Learning," *IEEE Micro*, 2018. https://doi.org/10.1109/MM.2018.112130359
+6. G. Orchard et al., "Efficient Neuromorphic Signal Processing with Loihi 2," IEEE Workshop on Signal Processing Systems (SiPS), 2021. https://doi.org/10.1109/SiPS52927.2021.00053
+7. Tenstorrent, skills. https://github.com/tenstorrent/skills
+8. Tenstorrent, tt-metal (TT-Metalium, TT-NN). https://github.com/tenstorrent/tt-metal
 
 ## License
 
