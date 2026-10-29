@@ -11,8 +11,10 @@ kernel written in tt-lang.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figures/step-times-dark.png">
-  <img alt="Time per step after each change: from 222.8 ms down to 9.44 ms, close to the A30's 7.52 ms with TF32" src="docs/figures/step-times-light.png" width="800">
+  <img alt="Time per step before and after: 222.8 ms before (the original SimpleLIFNode) and 9.44 ms after all changes, 23.6 times faster and close to the A30's 7.52 ms with TF32. The bars in between add the changes one at a time" src="docs/figures/step-times-light.png" width="800">
 </picture>
+
+The gray bar is before, the dark blue bar is after all changes. Each bar in between includes every change above it.
 
 ## Motivation, method and scope
 
@@ -56,15 +58,19 @@ mode.
 | (reference) A30, TF32 and `cudnn.benchmark` | 7.52 ms | 7.63 ms |
 | (reference) A30, strict fp32 as in SpikingJelly's benchmark | 14.75 ms | — |
 
-Where the time of one step goes in the final configuration:
+Where the time of one step goes, before and after:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figures/breakdown-dark.png">
-  <img alt="Breakdown of one step in the final configuration. p150a: conv 3.71 ms, LIF 2.11 ms, layout 1.30 ms, pooling and other 1.11 ms, stem conv 0.96 ms. A30: conv 3.25 ms, LIF 1.54 ms, stem conv 1.06 ms, BN 0.97 ms, pooling and other 0.58 ms" src="docs/figures/breakdown-light.png" width="800">
+  <img alt="Breakdown of one step. p150a before: layout 15.78 ms, pooling and other 3.96 ms, stem conv 3.88 ms, conv 3.71 ms, LIF 3.03 ms. p150a after: conv 3.71 ms, LIF 2.11 ms, layout 1.30 ms, pooling and other 1.11 ms, stem conv 0.96 ms. A30: conv 3.25 ms, LIF 1.54 ms, stem conv 1.06 ms, BN 0.97 ms, pooling and other 0.58 ms" src="docs/figures/breakdown-light.png" width="800">
 </picture>
 
-The p150a values are device busy times measured by replaying the TTNN IR written by tt-xla op by op (sum 9.19 ms; the
-step takes 9.44 ms). The replay used the tt-metal in a container, which is a different version from the one tt-xla
+The "before" bar is the first stage at which the breakdown was measured: the LIF as a kernel, called in the dimension
+order of the conv output (the third row of the table; re-measured at 31.39 ms per step). The original `SimpleLIFNode`
+stage (222.8 ms) was bound by host dispatch, and its breakdown was not measured by replaying the IR.
+
+The p150a values are device busy times measured by replaying the TTNN IR written by tt-xla op by op (after: sum 9.19
+ms, the step takes 9.44 ms; before: sum 30.36 ms). The replay used the tt-metal in a container, which is a different version from the one tt-xla
 uses, so treat these as estimates. The A30 values are GPU kernel times from torch.profiler (sum 7.41 ms; the step takes
 7.52 ms). On the p150a, the BNs are folded into the convs and the residual adds are fused into the LIF.
 

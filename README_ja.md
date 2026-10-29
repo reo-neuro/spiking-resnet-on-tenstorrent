@@ -9,8 +9,10 @@ SpikingJelly 2.0 の SEW-ResNet18 の推論を、Tenstorrent Blackhole p150a で
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figures/step-times-dark.png">
-  <img alt="変更ごとの 1 ステップの時間。222.8 ms から 9.44 ms まで下がり、A30（TF32）の 7.52 ms に近づく" src="docs/figures/step-times-light.png" width="800">
+  <img alt="変更前と変更後の 1 ステップの時間。変更前（元の SimpleLIFNode）は 222.8 ms、すべての変更を入れた後は 9.44 ms で 23.6 倍速く、A30（TF32）の 7.52 ms に近づく。途中の棒は変更を 1 つずつ積み重ねた時間" src="docs/figures/step-times-light.png" width="800">
 </picture>
+
+灰色の棒が変更前、濃い青の棒がすべての変更を入れた後。途中の棒は、それより上の変更をすべて含む。
 
 ## 動機と手法、主張範囲
 Tenstorrent Blackholeアーキテクチャは、格子状に並べたコアを2次元トーラスのNoC（2系統）でつないだ分散メモリのメニコアAIアクセラレータであり、この特徴はNeuromorphic ProcessorであるIntel Loihi/Loihi2に類似している。
@@ -43,14 +45,16 @@ TenstorrentハードウェアとSNNの相性について判断するためには
 | （参考）A30、TF32 と `cudnn.benchmark` | 7.52 ms | 7.63 ms |
 | （参考）A30、SpikingJelly のベンチマークと同じ厳密な fp32 | 14.75 ms | — |
 
-最後の構成での、1 ステップの時間の内訳は次のとおり。
+変更前と変更後の、1 ステップの時間の内訳は次のとおり。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figures/breakdown-dark.png">
-  <img alt="最後の構成の 1 ステップの内訳。p150a は conv 3.71 ms、LIF 2.11 ms、並べ替えなど 1.30 ms、プーリングなど 1.11 ms、stem の conv 0.96 ms。A30 は conv 3.25 ms、LIF 1.54 ms、stem の conv 1.06 ms、BN 0.97 ms、プーリングなど 0.58 ms" src="docs/figures/breakdown-light.png" width="800">
+  <img alt="1 ステップの内訳。p150a の変更前は並べ替えなど 15.78 ms、プーリングなど 3.96 ms、stem の conv 3.88 ms、conv 3.71 ms、LIF 3.03 ms。変更後は conv 3.71 ms、LIF 2.11 ms、並べ替えなど 1.30 ms、プーリングなど 1.11 ms、stem の conv 0.96 ms。A30 は conv 3.25 ms、LIF 1.54 ms、stem の conv 1.06 ms、BN 0.97 ms、プーリングなど 0.58 ms" src="docs/figures/breakdown-light.png" width="800">
 </picture>
 
-p150a の値は、tt-xla が出力した TTNN の IR を演算ごとにデバイスで再実行し、測定した稼働時間の和（9.19 ms。実測の 1 ステップは 9.44 ms）。再実行にはコンテナ内の tt-metal を用いた。tt-xla が用いる tt-metal とはバージョンが異なるため、目安の値である。A30 の値は torch.profiler で測定した GPU のカーネル時間の和（7.41 ms。実測は 7.52 ms）。p150a では、BN は conv に統合され、残差結合の加算は LIF と融合されている。
+変更前の棒は、内訳を最初に測定した段階（LIF をカーネル化し、conv の出力の順序で呼び出した段階。表の 3 行目で、測定し直した 1 ステップは 31.39 ms）。元の `SimpleLIFNode` の段階（222.8 ms）はホストのディスパッチが律速しており、IR の再実行による内訳は測定していない。
+
+p150a の値は、tt-xla が出力した TTNN の IR を演算ごとにデバイスで再実行し、測定した稼働時間の和（変更後 9.19 ms、実測の 1 ステップは 9.44 ms。変更前 30.36 ms）。再実行にはコンテナ内の tt-metal を用いた。tt-xla が用いる tt-metal とはバージョンが異なるため、目安の値である。A30 の値は torch.profiler で測定した GPU のカーネル時間の和（7.41 ms。実測は 7.52 ms）。p150a では、BN は conv に統合され、残差結合の加算は LIF と融合されている。
 
 ### 結果の解釈上の注意
 
