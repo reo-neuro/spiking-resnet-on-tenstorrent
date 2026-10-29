@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-SpikingJelly 2.0 の SEW-ResNet18 の推論を、Tenstorrent Blackhole p150a で実装して高速化した記録。モデルは tt-xla（torch_xla と PJRT プラグインの `pjrt-plugin-tt`）でコンパイルし、LIF ニューロンだけを tt-lang で記述したカーネルに置換した。
+SpikingJelly 2.0 [1] の SEW-ResNet18 [2] の推論を、Tenstorrent Blackhole p150a で実装して高速化した記録。モデルは tt-xla [3]（torch_xla と PJRT プラグインの `pjrt-plugin-tt`）でコンパイルし、LIF ニューロンだけを tt-lang [4] で記述したカーネルに置換した。
 
 - 推論 1 ステップ（T = 4 時刻ぶん）の時間: 222.8 ms → 9.44 ms
 - NVIDIA A30（TF32）では同じ 1 ステップが 7.52 ms。p150a の時間はその 1.26 倍。
@@ -16,10 +16,10 @@ SpikingJelly 2.0 の SEW-ResNet18 の推論を、Tenstorrent Blackhole p150a で
 灰色の棒が変更前、濃い青の棒がすべての変更を入れた後。途中の棒は、それより上の変更をすべて含む。
 
 ## 動機と手法、主張範囲
-Tenstorrent Blackholeアーキテクチャは、格子状に並べたコアを2次元トーラスのNoC（2系統）でつないだ分散メモリのメニコアAIアクセラレータであり、この特徴はNeuromorphic ProcessorであるIntel Loihi/Loihi2に類似している。
+Tenstorrent Blackholeアーキテクチャは、格子状に並べたコアを2次元トーラスのNoC（2系統）でつないだ分散メモリのメニコアAIアクセラレータであり、この特徴はNeuromorphic ProcessorであるIntel Loihi/Loihi2 [6][7] に類似している。
 そのため、Spiking Neural Networks (SNN) の高速化に向くと考え、まずは最も広く使われているSNNライブラリの一つであるSpikingJellyで実装された最も有名なモデルの一つであるSEW-ResNetの高速化に取り組む。
 そのうえで、Leaky Integrate-and-Fire Neuronの専用Fused Kernelを作る以外は、通常のTenstorrent hardware向け機械学習フレームワークコンパイラtt-xlaの最適化以外を出来るだけ用いずに高速化したい。ただし、PyTorch側でのモデルの書き換え（stemのconvのspace-to-depthによる変換と分割、平均プーリングの行列積への置換、テンソルの次元の順序の変更）と、ホストでの入力の前処理は用いた。
-Tenstorrentはエージェントによる最適化を支援するためのskillを提供しているため、これをClaude CodeでOpus5.5が用いることで、半自動で高速化に取り組む。
+Tenstorrentはエージェントによる最適化を支援するためのskill [8] を提供しているため、これをClaude CodeでOpus5.5が用いることで、半自動で高速化に取り組む。
 Tenstorrent BH p150aへのSNNの実装において、エージェントによるパフォーマンスエンジニアリングがどの程度機能するかのテストであるため、厳密な他種の計算基盤との比較などは現状意図していない。
 TenstorrentハードウェアとSNNの相性について判断するためにはもっと適したSNNの構成が存在するはずだが、まずは有名なものでテストしているため、それについても主張はしない。
 
@@ -32,7 +32,7 @@ TenstorrentハードウェアとSNNの相性について判断するためには
 
 | 段階 | まとめて同期 | 1 ステップごとに同期 |
 | --- | --- | --- |
-| 元の `SimpleLIFNode`（LIF を TTNN の小さな演算で実装していた） | 222.8 ms | 255.8 ms |
+| 元の `SimpleLIFNode`（LIF を TTNN [5] の小さな演算で実装していた） | 222.8 ms | 255.8 ms |
 | LIF を tt-lang の単一カーネルに置換する（BN の出力の順序 NCHW で呼び出す） | 70.1 ms | 85.7 ms |
 | LIF のカーネルを conv の出力の順序で呼び出す | 31.5 ms | 43.0 ms |
 | LIF の前後の reshape を排除する。layer4 の LIF には `[1, T, R, C]` の形状で入力する | 28.3 ms | 34.6 ms |
@@ -126,6 +126,17 @@ CUDA_VISIBLE_DEVICES=0 TF32=1 CUDNN_BENCH=1 BN=eval $VENV_A30/bin/python -I tool
 ## 次の段階
 
 Blackhole 上で、重み、膜電位、スパイクを Tensix コアの L1 に保持したまま、全コアを 1 時刻に 1 回同期させて SNN を実行するよりNeuromorphicな実装方式に進む予定である。
+
+## 参考文献
+
+1. W. Fang et al., "SpikingJelly: An open-source machine learning infrastructure platform for spike-based intelligence," *Science Advances*, 9(40), eadi1480, 2023. https://doi.org/10.1126/sciadv.adi1480 ／ リポジトリ: https://github.com/fangwei123456/spikingjelly（2.0.0 を使用）
+2. W. Fang, Z. Yu, Y. Chen, T. Huang, T. Masquelier, Y. Tian, "Deep Residual Learning in Spiking Neural Networks," NeurIPS 2021. https://arxiv.org/abs/2102.04159
+3. Tenstorrent, tt-xla. https://github.com/tenstorrent/tt-xla
+4. Tenstorrent, tt-lang. https://github.com/tenstorrent/tt-lang
+5. Tenstorrent, tt-metal（TT-Metalium、TT-NN）. https://github.com/tenstorrent/tt-metal
+6. M. Davies et al., "Loihi: A Neuromorphic Manycore Processor with On-Chip Learning," *IEEE Micro*, 2018. https://doi.org/10.1109/MM.2018.112130359
+7. G. Orchard et al., "Efficient Neuromorphic Signal Processing with Loihi 2," IEEE Workshop on Signal Processing Systems (SiPS), 2021. https://doi.org/10.1109/SiPS52927.2021.00053
+8. Tenstorrent, skills. https://github.com/tenstorrent/skills
 
 ## ライセンス
 
