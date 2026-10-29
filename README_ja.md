@@ -16,7 +16,7 @@ SpikingJelly 2.0 [1] の SEW-ResNet18 [2] の推論を、Tenstorrent Blackhole p
 灰色の棒が変更前、濃い青の棒がすべての変更を入れた後。途中の棒は、それより上の変更をすべて含む。
 
 ## 動機と手法、主張範囲
-Tenstorrent Blackholeアーキテクチャは、格子状に並べたコアを2次元トーラスのNoC（2系統）でつないだ分散メモリのメニコアAIアクセラレータであり、この特徴はNeuromorphic ProcessorであるIntel Loihi/Loihi2 [5][6] に類似している。
+Tenstorrent Blackholeは、格子状に並べたコアを2次元トーラスのNoC（2系統）でつないだ分散メモリのメニコアアーキテクチャを採用したAIアクセラレータであり、この特徴はNeuromorphic ProcessorであるIntel Loihi/Loihi2 [5][6] に類似している。
 そのため、Spiking Neural Networks (SNN) の高速化に向くと考え、まずは最も広く使われているSNNライブラリの一つであるSpikingJellyで実装された最も有名なモデルの一つであるSEW-ResNetの高速化に取り組む。
 そのうえで、Leaky Integrate-and-Fire Neuronの専用Fused Kernelを作る以外は、通常のTenstorrent hardware向け機械学習フレームワークコンパイラtt-xlaの最適化以外を出来るだけ用いずに高速化したい。ただし、PyTorch側でのモデルの書き換え（stemのconvのspace-to-depthによる変換と分割、平均プーリングの行列積への置換、テンソルの次元の順序の変更）と、ホストでの入力の前処理は用いた。
 Tenstorrentはエージェントによる最適化を支援するためのskill [7] を提供しているため、これをClaude CodeでOpus5.5が用いることで、半自動で高速化に取り組む。
