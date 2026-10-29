@@ -7,7 +7,10 @@ model is compiled with tt-xla (torch_xla and the `pjrt-plugin-tt` PJRT plugin); 
 kernel written in tt-lang.
 
 - One inference step (T = 4 time steps) went from 222.8 ms to 9.44 ms
-- An NVIDIA A30 (TF32) takes 7.52 ms for the same step; the p150a takes 1.26 times as long
+- An NVIDIA A30 (TF32) takes 7.52 ms for the same step; the p150a takes 1.26 times as long.
+- There is, however, still much room for optimization on the p150a: if the bandwidth were used to the full, the
+  execution time would be expected to drop to about half of what it is now. For example, the convs and the linear
+  layer have no kernel optimization yet and are left to the compiler.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figures/step-times-dark.png">
