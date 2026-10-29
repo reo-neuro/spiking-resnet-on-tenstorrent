@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-SpikingJelly 2.0 の SEW-ResNet18 の推論を、Tenstorrent Blackhole p150a で動かして速くした記録。モデルは tt-xla（torch_xla と PJRT プラグインの `pjrt-plugin-tt`）でコンパイルし、LIF ニューロンだけを tt-lang で書いたカーネルに置き換えた。
+SpikingJelly 2.0 の SEW-ResNet18 の推論を、Tenstorrent Blackhole p150a で実装して高速化した記録。モデルは tt-xla（torch_xla と PJRT プラグインの `pjrt-plugin-tt`）でコンパイルし、LIF ニューロンだけを tt-lang で記述したカーネルに置換した。
 
 - 推論 1 ステップ（T = 4 時刻ぶん）の時間: 222.8 ms → 9.44 ms
 - NVIDIA A30（TF32）では同じ 1 ステップが 7.52 ms。p150a の時間はその 1.26 倍
@@ -17,28 +17,28 @@ Tenstorrent Blackholeアーキテクチャは、格子状に並べたコアを2�
 そのため、Spiking Neural Networks (SNN) の高速化に向くと考え、まずは最も広く使われているSNNライブラリの一つであるSpikingJellyで実装された最も有名なモデルの一つであるSEW-ResNetの高速化に取り組む。
 そのうえで、Leaky Integrate-and-Fire Neuronの専用Fused Kernelを作る以外は、通常のTenstorrent hardware向け機械学習フレームワークコンパイラtt-xlaの最適化以外を出来るだけ用いずに高速化したい。ただし、PyTorch側でのモデルの書き換え（stemのconvの折りたたみと分割、平均プーリングの行列積への置き換え、テンソルの並びの変更）と、ホストでの入力の前処理は用いた。
 Tenstorrentはエージェントによる最適化を支援するためのskillを提供しているため、これをClaude CodeでOpus5.5が用いることで、半自動で高速化に取り組む。
-Tenstorrent BH p150aへのSNNの実装において、エージェントによるパフォーマンスエンジニアリングがどの程度機能するかのテストであるため、厳密に他種の計算基盤との比較などは現状意図していない。
+Tenstorrent BH p150aへのSNNの実装において、エージェントによるパフォーマンスエンジニアリングがどの程度機能するかのテストであるため、厳密な他種の計算基盤との比較などは現状意図していない。
 TenstorrentハードウェアとSNNの相性について判断するためにはもっと適したSNNの構成が存在するはずだが、まずは有名なものでテストしているため、それについても主張はしない。
 
 ## 結果
 
-条件: SEW-ResNet18（接続は ADD）、入力 224 × 224、batch 8、T = 4、fp32、BatchNorm は推論モード。
+条件: SEW-ResNet18（残差結合は ADDを用いる）、入力 224 × 224、batch 8、T = 4、fp32、BatchNorm は推論モード。
 
-- まとめて同期: k ステップを続けて送り、最後に 1 回だけ待つ。かかった時間を 1 ステップあたりに直した値
+- まとめて同期: k ステップを続けて送信し、最後に 1 回だけ待機する。かかった時間を 1 ステップあたりに直した値。
 - 1 ステップごとに同期: 毎ステップ、logits をホストに読み戻す
 
 | 段階 | まとめて同期 | 1 ステップごとに同期 |
 | --- | --- | --- |
-| 元の `SimpleLIFNode`（LIF を TTNN の小さな演算で流す） | 222.8 ms | 255.8 ms |
+| 元の `SimpleLIFNode`（LIF を TTNN の小さな演算で実装していた） | 222.8 ms | 255.8 ms |
 | LIF を tt-lang の 1 カーネルにする（BN の出力の並び NCHW で呼ぶ） | 70.1 ms | 85.7 ms |
-| LIF のカーネルを conv の出力の並びで呼ぶ | 31.5 ms | 43.0 ms |
-| LIF の前後の reshape を消す。layer4 は `[1, T, R, C]` で渡す | 28.3 ms | 34.6 ms |
-| trace を使う | 21.1 ms | 27.2 ms |
-| 入力をホストで conv の並びにして渡す | 17.1 ms | 22.7 ms |
-| stem の conv を 2 × 2 で折りたたむ | 14.5 ms | 19.6 ms |
-| stem の conv を時刻ごとに分け、LIF が直接読む | 11.9 ms | 17.3 ms |
-| LIF のカーネルの計算を減らし、110 コアで動かす | 10.1 ms | 15.5 ms |
-| 残差の足し算を LIF に取り込む | 9.59 ms | 14.2 ms |
+| LIF のカーネルを conv の出力の順序で呼び出す | 31.5 ms | 43.0 ms |
+| LIF の前後の reshape を排除する。layer4 へ `[1, T, R, C]` の形状で送信する | 28.3 ms | 34.6 ms |
+| trace を用いる | 21.1 ms | 27.2 ms |
+| 入力の順序をホストで conv と揃える | 17.1 ms | 22.7 ms |
+| stem の conv を 2 × 2 で格納する | 14.5 ms | 19.6 ms |
+| stem の conv を時刻ごとに分割し、後段のLIF が直接ロードする | 11.9 ms | 17.3 ms |
+| LIF のカーネルの計算を削減し、使用コアを110に増やす | 10.1 ms | 15.5 ms |
+| 残差結合の加算を LIF と融合させる | 9.59 ms | 14.2 ms |
 | stem の conv を 16 枚 × 2 に分け、平均プーリングを行列積にする | **9.44 ms** | 15.0 ms |
 | （参考）A30、TF32 と `cudnn.benchmark` | 7.52 ms | 7.63 ms |
 | （参考）A30、SpikingJelly のベンチマークと同じ厳密な fp32 | 14.75 ms | — |
