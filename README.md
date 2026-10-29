@@ -8,8 +8,10 @@ kernel written in tt-lang.
 
 - One inference step (T = 4 time steps) went from 222.8 ms to 9.44 ms
 - An NVIDIA A30 (TF32) takes 7.52 ms for the same step; the p150a takes 1.26 times as long.
-- There is, however, still much room for optimization on the p150a: if the bandwidth were used to the full, the
-  execution time would be expected to drop to about half of what it is now. For example, the convs and the linear
+- There is, however, still much room for optimization on the p150a. A lower-bound estimate from DRAM bandwidth, with
+  the current set of ops each using the DRAM bandwidth to the full, is about 4.8 ms (computed with the measured
+  bandwidth for mixed reads and writes, about 390 GB/s; about 3.7 ms with the specified 512 GB/s), so the execution
+  time could drop to about half of what it is now. For example, the convs and the linear
   layer have no kernel optimization yet and are left to the compiler.
 
 <picture>

@@ -6,7 +6,7 @@ SpikingJelly 2.0 の SEW-ResNet18 の推論を、Tenstorrent Blackhole p150a で
 
 - 推論 1 ステップ（T = 4 時刻ぶん）の時間: 222.8 ms → 9.44 ms
 - NVIDIA A30（TF32）では同じ 1 ステップが 7.52 ms。p150a の時間はその 1.26 倍。
-- ただし、p150aにはまだ多くの最適化の余地があり、帯域を最大限活用できれば、実行時間は現在のおよそ半分まで減少する見込みである。例えば、現状はConvやLinearへのカーネル最適化を行っておらず、コンパイラ任せである。
+- ただし、p150aにはまだ多くの最適化の余地がある。現在の演算の構成のまま各演算がDRAM帯域を使い切った場合の、DRAM帯域による下限見積もりは約 4.8 ms（読み書きが混在するときの実測帯域、約 390 GB/s で計算。仕様の 512 GB/s なら約 3.7 ms）で、実行時間は現在のおよそ半分まで減少しうる。例えば、現状はConvやLinearへのカーネル最適化を行っておらず、コンパイラ任せである。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figures/step-times-dark.png">
