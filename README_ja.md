@@ -125,7 +125,7 @@ CUDA_VISIBLE_DEVICES=0 TF32=1 CUDNN_BENCH=1 BN=eval $VENV_A30/bin/python -I tool
 
 ## 次の段階
 
-Blackhole 上で、重み、膜電位、スパイクを Tensix コアの L1 に保持したまま、全コアを 1 時刻に 1 回同期させて SNN を実行するよりNeuromorphicな実装方式に進む予定です。
+Blackhole 上で、重み、膜電位、スパイクを Tensix コアの L1 に保持したまま、全コアを 1 時刻に 1 回同期させて SNN を実行するよりNeuromorphicな実装方式に進む予定である。
 
 ## ライセンス
 
