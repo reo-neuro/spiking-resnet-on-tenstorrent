@@ -163,8 +163,8 @@ S-numbers in the notes and code comments refer to entries of our lab notebook, w
 
 ## Next
 
-We are moving to running SNNs on Blackhole with weights, membrane potentials and spikes kept in the Tensix cores' L1,
-synchronizing all cores once per time step.
+We plan to move on to a more neuromorphic way of implementing SNNs on Blackhole: weights, membrane potentials and
+spikes stay in the Tensix cores' L1, and all cores synchronize once per time step.
 
 ## License
 
