@@ -14,15 +14,15 @@ SNN の検証で、前提にしていたことと実際が違っていたもの�
 - 回避策を勧める前に、TT 側の実装（tt-xla のテスト、公式のベンチマークでの使い方）を読む（D3）
 - 「動かない」と結論する前に、失敗したテストが何を流していたか（forward だけか、backward もか）を確かめる（D4）
 - 公式が推奨する実行経路（PyTorch なら `torch.compile(backend="tt")`）を先に試す。別の経路で見つけた問題は、公式の経路で再現するかを見てから一般化する（D5）
-- ライブラリの使い方は手元にある版の文書とコードで確かめる。記憶にある古い版の API で説明しない（D1、D2）
+- ライブラリの使い方は手元にあるバージョンの文書とコードで確かめる。記憶にある古いバージョンの API で説明しない（D1、D2）
 - 「固定費」は入力の大きさにも作り方にもよらず、本質的に削れないものにだけ使う。batch によらないだけのもの（演算の数に比例する送り出しの費用など）を固定費と呼ばない（D16）
 - 移植の作業ではライブラリの中心の部品（SNN なら LIF）を先にターゲットのカーネルにする計画を立てる。周辺の設定（最適化レベル、trace）の調査から入らない（D16）
 - ローカルの clone にある skill や文書を「公式の今のもの」として示す前に、upstream に同じ場所で残っているかを確かめる（D17）
 - ベンチマークの条件（学習モードか推論モードか、精度、batch）は、ベンチマークのコードの該当行で確かめる。比べる相手と同じ条件かを、数値を比べる前に確かめる（D23）
 - 正しさを網の最後の出力の相関だけで判断しない。出力がバイアスに引きずられていると、途中が壊れていても相関は高く出る。層ごとに CPU と比べる（D24）
 - 正しさの指標が下がったとき、精度（丸め）のせいと決める前に、層ごとに出力の分布（スパイクの率、値の種類の割合）を CPU と比べる。丸めはしきい値の近くの反転を散らすだけで、分布はほとんど変えない。分布が変わるなら別の誤りがある（D25）
-- SEW-ResNet18 の logits の相関は、どこかに 1e-5 以上の乱れが入ると 0.92 前後まで下がって止まる（推論モードの BN、stem を埋めた版。S19）。小さな精度の差の大小は測れず、それより大きく下がったときだけ系統的な誤りを示す
-- 時間を測るときは、デバイスの完了まで待っているかを、出力をホストに読み戻す版と比べて確かめる。tt-xla の `torch_xla.sync(wait=True)` は待たない。カーネルの帯域はデバイスのプロファイラのカーネルの区間から出し、呼び出し 1 回の壁時計から出さない（D21）
+- SEW-ResNet18 の logits の相関は、どこかに 1e-5 以上の乱れが入ると 0.92 前後まで下がって止まる（推論モードの BN、stem を埋めたバージョン。S19）。小さな精度の差の大小は測れず、それより大きく下がったときだけ系統的な誤りを示す
+- 時間を測るときは、デバイスの完了まで待っているかを、出力をホストに読み戻すバージョンと比べて確かめる。tt-xla の `torch_xla.sync(wait=True)` は待たない。カーネルの帯域はデバイスのプロファイラのカーネルの区間から出し、呼び出し 1 回の壁時計から出さない（D21）
 - ホストとデバイスの往復を含む時間が、同じ条件でプロセスごとに二峰に分かれたら、デバイスを疑う前にホストの CPU の実際の周波数を見る（D31）
 
 ## 一覧
@@ -41,7 +41,7 @@ SNN の検証で、前提にしていたことと実際が違っていたもの�
 | D10 | 実装 | A30 で CLIF の Triton カーネルの境界値のテストが 1 件落ちる | LIF には関係しないので保留 | S1 |
 | D11 | 判断 | `SimpleLIFNode` は single-step の作りなので、T のループを外で回す必要があるとした | `multi_step_forward` があり、multi-step のまま使える | S4 |
 | D12 | 実装 | SEW-ResNet18 が batch 16 以上で実行時に止まる | batch 8 までで測る。1.4.0 でも起き、batch 12 でも止まる。tt-mlir #8559（未解決）と同じ形と見ている | S4、S9、S10 |
-| D13 | 判断 | TT の index に、今の版より新しい pjrt-plugin-tt があるとした | 公開の最新は今の版（08-31）。新しい tt-mlir を使うにはソースからのビルドが要る | S5 |
+| D13 | 判断 | TT の index に、今のバージョンより新しい pjrt-plugin-tt があるとした | 公開の最新は今のバージョン（08-31）。新しい tt-mlir を使うにはソースからのビルドが要る | S5 |
 | D14 | 判断 | SEW-ResNet18 の固定のコスト（約 315 ms）は、演算を 1 つずつホストから dispatch する時間だとした | デバイス上の時間が batch 8 で 243 ms あり、batch に比例する | S6 |
 | D15 | 実装 | trace が optimization_level 0 では Conv を含むとコンパイルできない | 小さいモデル（Conv＋BN＋ReLU）では 1.4.0 の level 1・2 でも abort する。ただし SEW-ResNet18（level 1、推論モードの BN）は trace で動く（S23） | S6、S8、S23 |
 | D16 | 判断 | 演算の送り出しの費用を「固定費」と呼び、LIF のカーネル化を後回しにしてプラグインの設定の調査を続けた | 送り出しの費用は演算の数に比例し、LIF の融合で減らすのが本筋。LIF のカーネル化を中心の作業にする | S11、S12 |
@@ -57,7 +57,7 @@ SNN の検証で、前提にしていたことと実際が違っていたもの�
 | D26 | 判断 | A30 と p150a の SEW-ResNet18 を、同じ fp32 の精度で比べているとした | A30 の基準（SpikingJelly のベンチマーク）は TF32 を切った厳密な fp32 の conv、p150a の conv は仮数 10 ビット相当。p150a に有利な条件の比較になっている。TF32 を許すと A30 は 14.75 ms から 7.5 ms | S19、S20 |
 | D27 | 判断 | LIF のカーネルは、1 回に運ぶブロックが小さいので読み書きが律速だとした（S22 の見立て） | SFPU の計算が約 7 割だった。tt-lang は `store` ごとに区間を分けて初期化を繰り返し、2 つの `store` に共通の部分式も別々に計算する。閾値を `lt` と `fill` にして計算を減らし、ブロックを広げて、20 層 2.81 → 1.92 ms | S25 |
 | D28 | 実装 | tt-lang のカーネルの `grid="auto"` は、tt-xla の経路でも実機の計算コアの格子（p150a は 11×10）になる | tt-xla 1.4.0 の橋渡しは、仮の 8×8 の Wormhole の device でカーネルを組み立てるので、64 コアになる（`arch` も `wormhole_b0`）。S24、S25 のモデルの LIF は 64 コアで動いていた。grid を明示すれば 110 コアで動く | S26 |
-| D29 | 実装 | コンテナで正しく動いた tt-lang のカーネルは、tt-xla の経路でも動く | stem の LIF に bf16 のスパイクを書かせる版（`make_lif4(bf16_out=True)`）は、コンテナでは正しく動いたが、SEW-ResNet18 の中ではデバイスが止まり、`tt-smi -r` が要った。原因は分かっていない | S26 |
+| D29 | 実装 | コンテナで正しく動いた tt-lang のカーネルは、tt-xla の経路でも動く | stem の LIF に bf16 のスパイクを書かせるバージョン（`make_lif4(bf16_out=True)`）は、コンテナでは正しく動いたが、SEW-ResNet18 の中ではデバイスが止まり、`tt-smi -r` が要った。原因は分かっていない | S26 |
 | D30 | 実装 | プラグインに tt-mlir の `override-conv2d-config` があるので、tt-xla から conv の設定や L1 への置き方を渡せるかもしれない | 1.4.0 が受けるのは決まったキーだけで、知らないキーは黙って捨てる。level 0、1 は活性化を全部 DRAM に置く。L1 に置き、conv の double buffer を使えば、stem を除く conv と LIF で約 1.3 ms 縮む（コンテナの単体）が、tt-xla の経路では使えない | S29 |
 | D31 | 判断 | 1 ステップごとに同期するときの上乗せ（約 5 ms）は、tt-xla の実行時の費用（trace の起動、読み戻し、送り出し）だとした | 大半はホストの CPU の省電力。待つたびにスレッドが眠り、CPU は 800 MHz のまま動く。SMT の兄弟を空回りさせると 14.2 → 11.0 ms。直すかはユーザーが決める | S24、S31 |
 | D32 | 実装 | tt-xla で、入力をタイルの形で渡せるかもしれない（ホストでタイルにするかは比べる条件の判断） | tt-xla 1.4.0 の trace の入力は常にホストの行優先として扱われ、デバイスのタイルを渡しても trace の中でタイルにする。方法がない | S24、S33 |
@@ -73,7 +73,7 @@ SNN の検証で、前提にしていたことと実際が違っていたもの�
 
 ### D2. `backend='torch'` で純 PyTorch の経路になるとした（判断）
 
-- 前提: multi-step のニューロンに `backend='torch'` を付ければ、カスタムカーネルを通らない（エージェントの記憶。旧版の API）
+- 前提: multi-step のニューロンに `backend='torch'` を付ければ、カスタムカーネルを通らない（エージェントの記憶。古いバージョンの API）
 - 実際: 2.0.0 の `LIFNode` に `backend` 引数はなく、バックエンドはテンソルのデバイスから自動で選ばれる。CPU でも xla でも、`torch.library` のカスタム演算子を通る（D6）
 - 影響: 最初の実行で `LIFNode` が止まった。純 PyTorch の `SimpleLIFNode` に切り替えた
 - 扱い: 訂正済み
@@ -127,13 +127,13 @@ SNN の検証で、前提にしていたことと実際が違っていたもの�
 - 影響: BN の融合などの最適化が使えず、p150a の速さは公式の条件より不利になる
 - 扱い: 0 で測り、比較には但し書きを付ける。新しいプラグインで直っているかを見る（作業記録の「次にやること」）
 - 追記（S6）: Conv 1 個（16→32、3×3）でも、bf16 でも、公式の例 `examples/pytorch/mnist_performant.py`（level 2、trace）でも起きる。モデルの組み方の問題ではない。segfault のスタックは `OpModel<PermuteOp>::getOpConstraints` → `ttnn::permute` → `ProgramImpl::update_kernel_groups` で、1 の `_M_range_check` と同じ、コンパイラが制約を問い合わせる経路の中。このプラグインは sfpi 7.69.0 を想定しているが、ホストの `/opt/tenstorrent/sfpi` は 7.83.0（2026-10-22 に 7.72.0 から上がった）
-- 追記（S7）: 7.69.0 を venv の中（`pjrt_plugin_tt/tt-metal/runtime/sfpi`）に置いても、level 1 の Conv 1 個は同じ `_M_range_check` で、`mnist_performant.py` は同じ `update_kernel_groups` で落ちた。level 1 のエラーはカーネルのビルドより前に出ている。sfpi の版は原因ではない
+- 追記（S7）: 7.69.0 を venv の中（`pjrt_plugin_tt/tt-metal/runtime/sfpi`）に置いても、level 1 の Conv 1 個は同じ `_M_range_check` で、`mnist_performant.py` は同じ `update_kernel_groups` で落ちた。level 1 のエラーはカーネルのビルドより前に出ている。sfpi のバージョンは原因ではない
 - 追記（S8）: 同じマシンで、プラグイン 1.4.0（`~/tt-xla-venv`、07-23 ビルド）なら level 1 の Conv（単独でも、eval の BN 付きでも）が通る。blacksmith の venv（1.5.0.dev20260831000501、`.so` は `venv-xla` と同一）では同じく落ちる。**D9 はこのマシンの問題ではなく 1.5.0.dev20260831000501 での退行**である。1.4.0 でも level 2 は、Conv＋BN 1 組のコンパイルが 28 分たっても終わらなかった（CPU 100%、mock device で探索中。SIGINT が効かず SIGTERM で止めた。デバイスは正常のまま）
 
 ### D10. A30 で CLIF の境界値のテストが落ちる（実装）
 
 - 期待: リリースの検証を通った 2.0.0 なので、テストは全部通る
-- 実際: `test_clif_scalar_division_matches_torch_at_threshold[1.03]` が落ちる。しきい値ちょうどの入力で、Triton 版と torch 版のスパイクが 3 要素中 2 つずれる。上流のリリースの検証（PR #778）で GPU として挙がっているのは RTX 4090 で、A30（sm_80）で検証されているかは確かめていない
+- 実際: `test_clif_scalar_division_matches_torch_at_threshold[1.03]` が落ちる。しきい値ちょうどの入力で、Triton の実装と torch の実装のスパイクが 3 要素中 2 つずれる。上流のリリースの検証（PR #778）で GPU として挙がっているのは RTX 4090 で、A30（sm_80）で検証されているかは確かめていない
 - 影響: LIF には関係しない
 - 扱い: 保留。CLIF を使うときに調べる
 
@@ -153,10 +153,10 @@ SNN の検証で、前提にしていたことと実際が違っていたもの�
 
 ### D13. TT の index に新しい pjrt-plugin-tt があるとした（判断）
 
-- 前提: nightly の wheel は毎日出ているので、2026-08-30 ビルドの今の版より新しいものが TT の index にある（S4 の「次にやること」。index を引いていなかった）
-- 実際: 2026-10-27 に `pip index versions pjrt-plugin-tt --pre --index-url https://pypi.eng.aws.tenstorrent.com/` を引くと、最新は `1.5.0.dev20260831000501`（今の版）。GitHub の tt-xla のリリースも 08-31 が最後。pypi.org には無い。tt-xla の main は 10-14 まで更新が続いていて、`third_party/CMakeLists.txt` の `TT_MLIR_VERSION` は `c282803f`（tt-mlir の PR #9279。while 対応の #9187 より後）
-- 影響: 「新しい版を別の venv に入れる」手順はそのままでは進められない
-- 扱い: 新しい版を試すなら、tt-xla をソースからビルドする（`docs/source/getting_started.md` の手順。tt-mlir のツールチェーンも作る）。進めるかはユーザーが決める
+- 前提: nightly の wheel は毎日出ているので、2026-08-30 ビルドの今のバージョンより新しいものが TT の index にある（S4 の「次にやること」。index を引いていなかった）
+- 実際: 2026-10-27 に `pip index versions pjrt-plugin-tt --pre --index-url https://pypi.eng.aws.tenstorrent.com/` を引くと、最新は `1.5.0.dev20260831000501`（今のバージョン）。GitHub の tt-xla のリリースも 08-31 が最後。pypi.org には無い。tt-xla の main は 10-14 まで更新が続いていて、`third_party/CMakeLists.txt` の `TT_MLIR_VERSION` は `c282803f`（tt-mlir の PR #9279。while 対応の #9187 より後）
+- 影響: 「新しいバージョンを別の venv に入れる」手順はそのままでは進められない
+- 扱い: 新しいバージョンを試すなら、tt-xla をソースからビルドする（`docs/source/getting_started.md` の手順。tt-mlir のツールチェーンも作る）。進めるかはユーザーが決める
 
 ### D14. 固定のコストはホストの dispatch だとした（判断）
 
@@ -171,21 +171,21 @@ SNN の検証で、前提にしていたことと実際が違っていたもの�
 - 実際: level 0 で、Linear→ReLU→Linear は trace で動く。Conv→ReLU（fp32 でも bf16 でも）はコンパイルで `error: Memory layout is required for non-SystemMemory buffer type.` を出して abort する。SEW-ResNet18 は `Device-resident input must be on device, but found on system memory` で止まる。公式のテストで trace を使うものは、どれも level 1 以上だった。level 1 は D9 で Conv が通らない
 - 影響: Conv を含むモデルで trace を使う手段がない
 - 扱い: 新しいプラグインで見る。デバイスは毎回正常（`fw_id=0`）
-- 追記（S8）: 1.4.0 でも、level 1 の trace と level 2 の trace（bf16）で、Conv＋BN は同じエラーで abort する。版によらない
-- 追記（S23）: 1.4.0 の level 1 で、SEW-ResNet18（推論モードの BN、stem を 32 チャネルに埋めた版、tt-lang の LIF）は trace で動いた（1 ステップごとに同期 22.7 ms、まとめて同期 17.1 ms）。公式の push テストにも ResNet-50 を level 1 の trace で流すもの（`tests/torch/models/resnet/test_resnet.py` の `test_torch_resnet_inference_trace`）がある。小さいモデルとの違い（Conv の bias、入力が直接 Conv に入ることなど）は切り分けていない。「Conv を含むと trace は使えない」は誤りだった
+- 追記（S8）: 1.4.0 でも、level 1 の trace と level 2 の trace（bf16）で、Conv＋BN は同じエラーで abort する。バージョンによらない
+- 追記（S23）: 1.4.0 の level 1 で、SEW-ResNet18（推論モードの BN、stem を 32 チャネルに埋めたバージョン、tt-lang の LIF）は trace で動いた（1 ステップごとに同期 22.7 ms、まとめて同期 17.1 ms）。公式の push テストにも ResNet-50 を level 1 の trace で流すもの（`tests/torch/models/resnet/test_resnet.py` の `test_torch_resnet_inference_trace`）がある。小さいモデルとの違い（Conv の bias、入力が直接 Conv に入ることなど）は切り分けていない。「Conv を含むと trace は使えない」は誤りだった
 
 ### D16. 送り出しの費用を「固定費」と呼び、LIF のカーネル化を後回しにした（判断）
 
 - 前提: batch を変えても時間が変わらない部分を「固定費」と呼んだ。また、LIF を ttnn か tt-metal で書き直すのは、torch_xla の参照実装の結果を見てから決めればよいとした（`setup.md` の冒頭の方針）
 - 実際: その部分は演算をデバイスに 1 つずつ送り出す費用で、演算の数に比例する（1 個あたり約 150〜170 µs、S11）。最大の出どころは LIF を小さな要素ごとの演算に分けて流していること。A30 でも、LIF を Triton の 1 カーネルにした `LIFNode` は `SimpleLIFNode` より約 6 割速い（S12）。SNN のライブラリを移植するなら、LIF をカーネルにするのが中心の作業になるのは、始める前から分かることだった（ユーザーの指摘）
-- 影響: S5〜S12 の多くを、プラグインの版、最適化レベル、trace の調査に使った。そこで分かったこと（D9 の退行、1.4.0 の level 1、送り出しの費用の大きさ）は、LIF のカーネル化の前提として使える
+- 影響: S5〜S12 の多くを、プラグインのバージョン、最適化レベル、trace の調査に使った。そこで分かったこと（D9 の退行、1.4.0 の level 1、送り出しの費用の大きさ）は、LIF のカーネル化の前提として使える
 - 扱い: 用語を直した。次にやることの 1 番を LIF の融合カーネルの実装にした
 
 ### D17. upstream から消えた skill を、今の公式の skill として示した（判断）
 
 - 前提: 手元の `~/tt-metal` の `.agents/skills`（graph-fusing、optimize、tt-lang、tt-device-usage など）を、Tenstorrent の今の公式の skill として示した（S13 の前半）
 - 実際: upstream の tt-metal からは 2026-09-01 に削除されていた（PR #55086。専用のリポジトリへ移すため）。今は `tenstorrent/skills` にプラグインとしてまとめられている。tt-lang の skill は移っておらず、後継は tt-lang のリポジトリの `claude-slash-commands/` だった。ユーザーが upstream から取り込めないかと尋ねて分かった
-- 影響: 古い版を読んで手段を比べた。graph-fusing の本体は upstream と同じで、比べた結論は変わらない
+- 影響: 古いバージョンを読んで手段を比べた。graph-fusing の本体は upstream と同じで、比べた結論は変わらない
 - 扱い: upstream から取り込み直した（`setup.md` の「公式の skill と slash command」）。教訓: ローカルの clone にある skill や文書を「公式の今のもの」として示す前に、upstream に同じ場所で残っているかを確かめる
 
 ### D18. 同じ tt-lang のカーネルを 2 回以上呼ぶと resolve が失敗する（実装）
@@ -193,16 +193,16 @@ SNN の検証で、前提にしていたことと実際が違っていたもの�
 - 期待: `@tt_torch.tt_lang_operation` で包んだカーネルは、グラフの中で何回呼んでもよい
 - 実際: 2 回目の resolve で `TTLangError: tt-lang compile did not produce a CompiledTTNNKernel`。tt-lang（`ttl_api.py`）がカーネルのオブジェクトごとに、形をキーにしてコンパイル結果をキャッシュしている。キャッシュに当たると `_compile_kernel` が呼ばれず、tt-xla（`tt_torch/tt_lang.py` の `_drive_ttl_compile`）が横取りする関数が何も捕まえない。tt-xla の文書は「tt-lang は自分でキャッシュすべき」とだけ書いていて、この組み合わせは想定していないように見える
 - 影響: SEW-ResNet18 のように、同じ形の LIF が何層もあるモデルで止まる
-- 扱い: `@tt_lang_operation` の中で、呼ぶたびに `make_lif(T)` を作り直して回避（中身はグラフのコンパイル時にしか呼ばれない）。tt-xla の新しい版で直っているかは見ていない
+- 扱い: `@tt_lang_operation` の中で、呼ぶたびに `make_lif(T)` を作り直して回避（中身はグラフのコンパイル時にしか呼ばれない）。tt-xla の新しいバージョンで直っているかは見ていない
 
 ### D19. tt-lang の仕様の書き方が、wheel の tt-lang 1.1.5 では通らない（実装）
 
 - 期待: 手元の tt-lang の clone（09-30）の仕様と `/ttl-import` の手順どおりに書けば、tt-xla 1.4.0 の wheel の tt-lang（1.1.5.dev20260704）でも通る
 - 実際: 次の点が違った。`>=` がない（`<`、`>`、`==`、`!=` はある）。`ttl.block.where`、`mask`、`clamp` がない（コンテナの 1.1.10 でもシミュレータにしかない）。fill は `ttl.math.fill` ではなく `ttl.block.fill`。カーネルの中で条件式（`a if c else b`）を使えない。キャプチャした `torch.dtype` を符号化できない（1.1.10）。fp32 では 1 つの CB を FPU の演算（add、sub）と SFPU の演算（mul、floor、スカラーとの乗算など）の両方で読めない
 - 影響: LIF の式を組み直す必要があった（S14）
-- 扱い: スパイクを `sign(relu(floor(h)))`、リセットを `v = hb · (1 − s)` にし、h を SFPU 用と FPU 用の 2 つの CB に書いた。tt-lang で書くときは、仕様ではなく使う版の `ttl/_generated_elementwise.py` と `ttl/operators.py` で使える演算を確かめる
+- 扱い: スパイクを `sign(relu(floor(h)))`、リセットを `v = hb · (1 − s)` にし、h を SFPU 用と FPU 用の 2 つの CB に書いた。tt-lang で書くときは、仕様ではなく使うバージョンの `ttl/_generated_elementwise.py` と `ttl/operators.py` で使える演算を確かめる
 - 追記（S25）: fill は、モジュールの頭で `fill = ttl.block.fill if hasattr(ttl, "block") else ttl.math.fill` と別名にすれば、1.1.5 と 1.1.10 の両方で使える（1.1.5 には `ttl.block` がなく、1.1.10 は `ttl.math.fill` を拒む）。型は、カーネルの中に `dtype=torch.float32` と直接書けば通る（キャプチャした変数の `torch.dtype` は符号化できないが、モジュールの属性として書いたものは通る）。1.1.5 でも、スカラーとの演算は掛け算だけ（足し算と引き算は 2 つのブロックの間だけ）
-- 追記（S26）: 1 つの計算の区間に fp32 と bf16 のタイルが混ざると、どちらの版もエラーにする（`mixed f32 and non-f32 tile arguments`）。例外は fp32 の入力がどれも直接 `typecast` に渡るとき。1.1.10 では fp32 → fp32 の `typecast` を挟めば通ったが、1.1.5 ではそれが先に畳まれて通らない。fp32 の CB に書いてから、別の区間で fp32 → bf16 の `typecast` をかければ両方で通る（`make_lif4(bf16_out=True)`）
+- 追記（S26）: 1 つの計算の区間に fp32 と bf16 のタイルが混ざると、どちらのバージョンもエラーにする（`mixed f32 and non-f32 tile arguments`）。例外は fp32 の入力がどれも直接 `typecast` に渡るとき。1.1.10 では fp32 → fp32 の `typecast` を挟めば通ったが、1.1.5 ではそれが先に畳まれて通らない。fp32 の CB に書いてから、別の区間で fp32 → bf16 の `typecast` をかければ両方で通る（`make_lif4(bf16_out=True)`）
 
 ### D20. 同じ条件でも 1 ステップの時間が一定にならない（実装）
 
@@ -224,7 +224,7 @@ SNN の検証で、前提にしていたことと実際が違っていたもの�
 - 期待: fp32 のテンソルを受ける tt-lang のカーネルは、加減乗除を fp32 で計算する
 - 実際: 2 つの CB を直接足す（`(v + x) * 0.5` など）と FPU で計算され、fp32 の入力が仮数約 10 ビットに丸められる（`x + x` で正確に一致した要素が 0、相対誤差は最大 9.4e-4。S16）。SFPU を通る書き方（`v + (x * 0.5 - v * 0.5)` など）なら、ttnn で直接動かすと CPU とビット単位で一致する（コンテナの 1.1.10。SEW-ResNet18 の LIF の 5 つの形で不一致 0。S17）。これは SFPU が直接読む CB に tt-lang が `UnpackToDestFp32` を設定するため（wheel の 1.1.5 にもある。`ttl/ttl_api.py` の `_set_unpack_to_dest_fp32`）。しかし tt-xla 1.4.0 の橋渡し（`tt_torch/tt_lang.py` の `_serialize_kernel_config`）は計算カーネルの設定のうち `math_fidelity`、`fp32_dest_acc_en`、`dst_full_sync_en`、`bfp8_pack_precise`、`math_approx_mode` しか運ばず、tt-xla の経路では fp32 の CB の読み込みがすべて丸められる。手元の tt-xla の clone（`b360078`、10-02）も同じ
 - 影響: tt-xla の経路の LIF は、しきい値のごく近くで CPU と食い違う（`[4·6272, 1024]` の形で 0.005〜0.007%）。カーネルの書き方では直せない。読み込みは切り捨て（round to nearest ではない）で、デバイスの BN の出力に CPU で同じ切り捨てをした LIF をかけると、デバイスの出力とビット単位で一致した（S19）。ただし conv の出力（LIF の入力）がすでに仮数 10 ビットに丸まっているので、SEW-ResNet18 の最初の LIF で D22 が足す反転は 46 個で、conv の丸めによる CPU との差（約 17,200 個）より 2 桁少ない。CPU で D22 だけをまねた網の logits の相関は 0.922 で、ほかの小さな乱れを入れたときと同じ水準（S19）。S18 で「logits の相関が低いのは D22 のため」と推測したのは誤りで、原因は D25 だった
-- 扱い: `make_lif_nchw` は SFPU だけで計算する書き方にした（ttnn で直接動かせば正確で、tt-xla が設定を運ぶようになれば正確になる）。tt-xla の新しい版で直っているかは見ていない。GitHub への報告はユーザーが決める
+- 扱い: `make_lif_nchw` は SFPU だけで計算する書き方にした（ttnn で直接動かせば正確で、tt-xla が設定を運ぶようになれば正確になる）。tt-xla の新しいバージョンで直っているかは見ていない。GitHub への報告はユーザーが決める
 
 ### D23. ベンチマークの推論の段で BN は学習モードだとした（判断）
 
@@ -238,7 +238,7 @@ SNN の検証で、前提にしていたことと実際が違っていたもの�
 - 期待: optimization_level 1 でも、conv は CPU とほぼ一致する（S10 で level 1 を使い始めたときは、SEW-ResNet18 の logits の相関だけを見ていた）
 - 実際: SEW-ResNet18 の stem の conv（3 → 64 チャネル、7×7、stride 2、padding 3、fp32、batch 8 と 32）は、level 1 では CPU との相関が 0.28 前後で、出力の散らばりは CPU の約半分になる。level 0 では 0.999998。入力のチャネルを 4、8、16 にゼロで埋めても誤り（0.21〜0.28）、32 なら正しい（1.000000）。ほかの conv（3×3 と 1×1、64〜512 チャネル）は level 1 でも 0.999997 以上（S18。`tools/xla-conv-check.py`、`tools/xla-stem-pad.py`）
 - 影響: S10〜S17 の level 1 の SEW-ResNet18 は、最初の層から誤った値で計算していた。logits の相関（0.85〜0.89）は、logits の大半が線形層のバイアスだったために高く出ていて、誤りを示さなかった。時間は、計算の量が同じなので大きくは変わらない見込み（stem の conv の時間が誤った設定のものだった可能性はある）
-- 扱い: `xla-sew18.py` に `STEM_PAD=32`（デバイスのモデルだけ、stem の conv の入力と重みをゼロで 32 チャネルに埋める）を足した。1 ステップは約 4.6〜6.7 ms 増える。tt-xla の新しい版で直っているかは見ていない。GitHub への報告はユーザーが決める
+- 扱い: `xla-sew18.py` に `STEM_PAD=32`（デバイスのモデルだけ、stem の conv の入力と重みをゼロで 32 チャネルに埋める）を足した。1 ステップは約 4.6〜6.7 ms 増える。tt-xla の新しいバージョンで直っているかは見ていない。GitHub への報告はユーザーが決める
 - 追記（S23）: stem を stride folding で 4×4、stride 1 の conv（入力 12 チャネル）に書き換えても同じで、16 チャネルに埋めると CPU との相関 0.39、32 チャネルなら 0.999996
 
 ### D25. tt-lang の演算の出力先を `torch.zeros_like` で作れば、呼び出しごとに別のバッファになると思った（実装）
@@ -246,7 +246,7 @@ SNN の検証で、前提にしていたことと実際が違っていたもの�
 - 期待: `lif_op(x, torch.zeros_like(x))` のように呼べば、呼び出しごとに新しい出力先ができ、結果は呼び出しごとに別のテンソルになる（tt-xla の公式のテスト `tests/torch/ops/test_tt_lang_kernel_e2e.py` も出力先を `torch.zeros_like` で作る。ただし 1 つのプログラムで呼ぶのは 1 回だけ）
 - 実際: tt-mlir は形と値が同じ定数を 1 つにまとめる（SEW-ResNet18 の TTNN の IR で、20 個の LIF に対して `ttnn.full` は形ごとの 5 個）。`ttnn.tt_lang_op` は DPS の演算で、TTNN では結果を返さない `ttnn.generic` になり、出力先の引数に直接書き込む。そのため同じ形の LIF がすべて 1 つのバッファに書き、結果はそのバッファから読まれる。順に使い切る間は問題ないが、downsample のあるブロック（layer2.0、layer3.0、layer4.0）の `sn2 + downsample_sn` は `ttnn.add(%5, %5)` になり、後に書いた `downsample_sn` の 2 倍になっていた。layer2 の出力で値 2 の割合が CPU の 0.44% に対して 2.74%、平均が 0.098 に対して 0.145 で、layer4 までで CPU との不一致は `SimpleLIFNode` の 14.4% に対して 28.4% だった（S19）
 - 影響: S14〜S18 の tt-lang の LIF を使った SEW-ResNet18 の出力は、layer2 から誤っていた（並べ方によらない。`flat`、`nchw`、`nhwc4` のすべて）。logits の CPU との相関は 0.731 で、元の LIF の 0.908 より低かった。時間には影響しない（演算は同じ）。`xla-ttl-lif.py` のように 1 つの LIF の出力を次の LIF の入力にするだけのつなぎ方では、壊れ方が表に出ない
-- 扱い: `xla-sew18.py` の `TtlLIF` は、LIF ごとに別の値で埋めた出力先を渡す（`torch.full_like(x, -1.0 - k)`。カーネルは全要素を書き換えるので、値は結果に影響しない）。IR で `ttnn.full` が 20 個になり、各 `ttnn.generic` が別のバッファに書くことを確かめた。logits の相関は 0.911（`SimpleLIFNode` は 0.908）、1 ステップは 43.5 ms で変わらない。`LIF_OUT=zeros` で元の作り方に戻せる。tt-mlir の側で直すべきもの（DPS の出力先にした定数をまとめない、または `ttnn.generic` の前に出力先を新しく確保する）と見ている。新しい版で直っているかは見ていない。GitHub への報告はユーザーが決める
+- 扱い: `xla-sew18.py` の `TtlLIF` は、LIF ごとに別の値で埋めた出力先を渡す（`torch.full_like(x, -1.0 - k)`。カーネルは全要素を書き換えるので、値は結果に影響しない）。IR で `ttnn.full` が 20 個になり、各 `ttnn.generic` が別のバッファに書くことを確かめた。logits の相関は 0.911（`SimpleLIFNode` は 0.908）、1 ステップは 43.5 ms で変わらない。`LIF_OUT=zeros` で元の作り方に戻せる。tt-mlir の側で直すべきもの（DPS の出力先にした定数をまとめない、または `ttnn.generic` の前に出力先を新しく確保する）と見ている。新しいバージョンで直っているかは見ていない。GitHub への報告はユーザーが決める
 
 ### D26. A30 と p150a の SEW-ResNet18 を、同じ fp32 の精度で比べているとした（判断）
 
@@ -260,7 +260,7 @@ SNN の検証で、前提にしていたことと実際が違っていたもの�
 - 期待: LIF は要素ごとの単純な計算なので、メモリの読み書きで決まる。layer1 の 150〜190 GB/s は、1 回に運ぶブロックが 2 タイルと小さいため（S22 の見立て。作業記録の「次にやること」の (b)）
 - 実際: layer1 の形で行ごとのサイクル数を測ると（`run-test.sh --auto-profile`）、読み出しのスレッドは 44.8% の時間、バッファの空きを待っていて、計算が律速だった。1 時刻 1 タイルに約 4,500 サイクル。生成された C++ では、tt-lang は `store` ごとに DEST の区間を分け、区間ごとに `init_sfpu`、演算ごとに初期化を呼び、2 つの `store` が同じ部分式を使っても別々に計算する。`floor → relu → sign`（1 行あたり約 30 命令）を 1 時刻に 2 回求めていた
 - 影響: ブロックを広げるだけでは足りず、計算を先に減らす必要があった。計算を減らすと、今度は転送（1 コアに 1 件しか転送が飛ばない作り）が前に出た
-- 扱い: 閾値を `lt` と `fill` にし、h を運び（`store` が 2 つでも計算し直す量が小さい形）、ブロックを `(rb, bw)` に広げた（S25）。tt-lang のカーネルは、生成された C++（`run-test.sh --emit-runner`）と `--auto-profile` で区間ごとの費用を見てから組み立てる。計算だけ・転送だけの版を作って比べると、どちらが律速かを切り分けられる
+- 扱い: 閾値を `lt` と `fill` にし、h を運び（`store` が 2 つでも計算し直す量が小さい形）、ブロックを `(rb, bw)` に広げた（S25）。tt-lang のカーネルは、生成された C++（`run-test.sh --emit-runner`）と `--auto-profile` で区間ごとの費用を見てから組み立てる。計算だけ・転送だけのバージョンを作って比べると、どちらが律速かを切り分けられる
 
 ### D28. `grid="auto"` は tt-xla の経路でも実機のコアの格子になると思った（実装）
 
